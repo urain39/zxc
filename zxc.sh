@@ -6,6 +6,7 @@ PRE="6"
 CRF="40"
 TBR="3M"
 TUN="5"
+ADF="anull"
 
 # Common constants
 VDF='scale=if(lte(iw\,ih)\,min(iw\,1080)\,-1):if(lte(iw\,ih)\,-1\,min(ih\,1080)),crop=iw-mod(iw\,8):ih-mod(ih\,8)'
@@ -15,35 +16,33 @@ SVT='ac-bias=1.0:enable-cdef=1:enable-dlf=2:enable-kf-tf=1:enable-restoration=1:
 parse_params() {
   BLK="${1#:}"
   BLK="${BLK%:}"
-  SEP="$IFS"
+  SEP="${IFS}"
   IFS=':'
   # shellcheck disable=SC2086
-  for KV in $BLK; do
-    [ -z "$KV" ] && continue
+  for KV in ${BLK}; do
+    [ -z "${KV}" ] && continue
     KEY="${KV%%=*}"
     VAL="${KV#*=}"
-    case "$KEY" in
-      mode|m)  MOD="$VAL" ;;
-      preset|p) PRE="$VAL" ;;
-      crf|c)   CRF="$VAL" ;;
-      tbr|t)   TBR="$VAL" ;;
-      tune|T)  TUN="$VAL" ;;
+    case "${KEY}" in
+      mode|m)  MOD="${VAL}" ;;
+      preset|p) PRE="${VAL}" ;;
+      crf|c)   CRF="${VAL}" ;;
+      tbr|t)   TBR="${VAL}" ;;
+      tune|T)  TUN="${VAL}" ;;
     esac
   done
-  IFS="$SEP"
+  IFS="${SEP}"
 }
 
 # Decide audio filter based on input audio channel count
 audio_filter_args() {
   CHN=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" 2>/dev/null)
-  case "$CHN" in
+  case "${CHN}" in
     ''|*[!0-9]*) ADF="anull" ;;
     *)
-      if [ "$CHN" -gt 2 ]; then
+      if [ "${CHN}" -gt 2 ]; then
         # shellcheck disable=SC2140
-        ADF="sofalizer=sofa=""${PREFIX-:"/usr"}""/share/libmysofa/default.sofa:type=time:gain=8:interpolate=1"
-      else
-        ADF="anull"
+        ADF="sofalizer=sofa=""${PREFIX-:"/usr"}""/share/libmysofa/default.sofa:type=time:gain=6:interpolate=1"
       fi
       ;;
   esac
@@ -52,34 +51,34 @@ audio_filter_args() {
 # 1-pass encoding
 encode_1pass() {
   VID="$1"
-  audio_filter_args "$VID"
-  taskset -a f0 ffmpeg -i "$VID" \
-    -vf "$VDF" \
-    -af "$ADF" \
-    -c:v libsvtav1 -preset "$PRE" -g 120 -bf 8 -refs 5 -crf "$CRF" -pix_fmt yuv420p10le \
+  audio_filter_args "${VID}"
+  taskset -a f0 ffmpeg -i "${VID}" \
+    -vf "${VDF}" \
+    -af "${ADF}" \
+    -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -crf "${CRF}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=0:superres-mode=3:superres-qthres=$((CRF - 5)):tune=${TUN}" \
     -c:a libopus -ac 2 -b:a 76.8K \
-    "!$VID"
+    "!${VID}"
 }
 
 # 2-pass encoding
 encode_2pass() {
   VID="$1"
-  taskset -a f0 ffmpeg -i "$VID" \
-    -vf "$VDF" \
-    -c:v libsvtav1 -preset "$PRE" -g 120 -bf 8 -refs 5 -b:v "$TBR" -pix_fmt yuv420p10le \
+  taskset -a f0 ffmpeg -i "${VID}" \
+    -vf "${VDF}" \
+    -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${TBR}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 \
     -an \
     -f null \
     "/dev/null"
-  audio_filter_args "$VID"
-  taskset -a f0 ffmpeg -i "$VID" \
-    -vf "$VDF" \
-    -af "$ADF" \
-    -c:v libsvtav1 -preset "$PRE" -g 120 -bf 8 -refs 5 -b:v "$TBR" -pix_fmt yuv420p10le \
+  audio_filter_args "${VID}"
+  taskset -a f0 ffmpeg -i "${VID}" \
+    -vf "${VDF}" \
+    -af "${ADF}" \
+    -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${TBR}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 2 \
     -c:a libopus -ac 2 -b:a 76.8K \
-    "!$VID"
+    "!${VID}"
 }
 
 if [ $# -eq 0 ]; then
@@ -96,12 +95,12 @@ case "$1" in
 esac
 
 for VID in "$@"; do
-  case "$VID" in
+  case "${VID}" in
     !*) continue ;;
   esac
-  [ -f "!$VID" ] && continue
-  case "$MOD" in
-    2pass) encode_2pass "$VID" ;;
-    *)     encode_1pass "$VID" ;;
+  [ -f "!${VID}" ] && continue
+  case "${MOD}" in
+    2pass) encode_2pass "${VID}" ;;
+    *)     encode_1pass "${VID}" ;;
   esac
 done
