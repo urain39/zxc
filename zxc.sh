@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Defaults
-MOD="1pass"
+MOD="quality"
 PRE="6"
 CRF="40"
 TBR="3M"
@@ -24,11 +24,11 @@ parse_params() {
     KEY="${KV%%=*}"
     VAL="${KV#*=}"
     case "${KEY}" in
-      mode|m)  MOD="${VAL}" ;;
-      preset|p) PRE="${VAL}" ;;
-      crf|c)   CRF="${VAL}" ;;
-      tbr|t)   TBR="${VAL}" ;;
-      tune|T)  TUN="${VAL}" ;;
+      mode|m)    MOD="${VAL}" ;;
+      preset|p)  PRE="${VAL}" ;;
+      quality|q) CRF="${VAL}" ;;
+      bitrate|b) TBR="${VAL}" ;;
+      tune|t)    TUN="${VAL}" ;;
     esac
   done
   IFS="${SEP}"
@@ -36,20 +36,22 @@ parse_params() {
 
 # Decide audio filter based on input audio channel count
 audio_filter_args() {
-  CHN=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" 2>/dev/null)
+  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" 2>/dev/null)"
   case "${CHN}" in
     ''|*[!0-9]*) ADF="anull" ;;
     *)
       if [ "${CHN}" -gt 2 ]; then
         # shellcheck disable=SC2140
         ADF="sofalizer=sofa=""${PREFIX-:"/usr"}""/share/libmysofa/default.sofa:type=time:gain=6:interpolate=1"
+      else
+        ADF="anull"
       fi
       ;;
   esac
 }
 
 # 1-pass encoding
-encode_1pass() {
+encode_quality() {
   VID="$1"
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
@@ -62,7 +64,7 @@ encode_1pass() {
 }
 
 # 2-pass encoding
-encode_2pass() {
+encode_bitrate() {
   VID="$1"
   taskset -a f0 ffmpeg -i "${VID}" \
     -vf "${VDF}" \
@@ -100,7 +102,7 @@ for VID in "$@"; do
   esac
   [ -f "!${VID}" ] && continue
   case "${MOD}" in
-    2pass) encode_2pass "${VID}" ;;
-    *)     encode_1pass "${VID}" ;;
+    bitrate) encode_bitrate "${VID}" ;;
+    *)       encode_quality "${VID}" ;;
   esac
 done
