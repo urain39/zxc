@@ -42,7 +42,7 @@ audio_filter_args() {
     *)
       if [ "${CHN}" -gt 2 ]; then
         # shellcheck disable=SC2140
-        ADF="sofalizer=sofa=""${PREFIX-:"/usr"}""/share/libmysofa/default.sofa:type=time:gain=6:interpolate=1"
+        ADF="sofalizer=sofa=${PREFIX:-"/usr"}/share/libmysofa/default.sofa:type=time:gain=6:interpolate=1"
       else
         ADF="anull"
       fi
@@ -72,7 +72,7 @@ encode_bitrate() {
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 \
     -an \
     -f null \
-    "/dev/null"
+    "/dev/null" || return 1
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
     -vf "${VDF}" \
