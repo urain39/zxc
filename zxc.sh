@@ -37,6 +37,7 @@ parse_params() {
 # Decide audio filter based on input audio channel count
 audio_filter_args() {
   CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" 2>/dev/null)"
+  # ADF is input-dependent and reused; explicit reset is required on each use
   case "${CHN}" in
     ''|*[!0-9]*) ADF="anull" ;;
     *)
