@@ -19,10 +19,10 @@ parse_params() {
   SEP="${IFS}"
   IFS=':'
   # shellcheck disable=SC2086
-  for KV in ${BLK}; do
-    [ -z "${KV}" ] && continue
-    KEY="${KV%%=*}"
-    VAL="${KV#*=}"
+  for PKV in ${BLK}; do
+    [ -z "${PKV}" ] && continue
+    KEY="${PKV%%=*}"
+    VAL="${PKV#*=}"
     case "${KEY}" in
       mode|m)    MOD="${VAL}" ;;
       preset|p)  PRE="${VAL}" ;;
