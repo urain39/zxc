@@ -62,13 +62,13 @@ parse_params() {
 audio_filter_args() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
-  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" 2>/dev/null)"
+  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" | sed 's/,$//')"
   # Match exact numeric format (e.g., 1, 2, 8)
   case "${CHN}" in
     [0-9]|[0-9][0-9])
       if [ "${CHN}" -gt 2 ]; then
         # shellcheck disable=SC2140
-        ADF="sofalizer=sofa=${PREFIX:-"/usr"}/share/libmysofa/default.sofa:type=time:gain=6:interpolate=1"
+        ADF="sofalizer=sofa=${PREFIX:-"/usr"}/share/libmysofa/default.sofa:type=time:gain=10:interpolate=1"
       fi
       ;;
   esac
