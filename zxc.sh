@@ -77,7 +77,7 @@ audio_filter_args() {
 # 1-pass encoding
 encode_quality() {
   VID="$1"
-  OUT="!${VID%.*}_Q.p${PRE}.c${CRF}.B${ABR}.t${TUN}.${VID##*.}"
+  OUT="!${VID%.*}_Q,p${PRE},c${CRF},B${ABR},t${TUN}.${VID##*.}"
   [ -f "${OUT}" ] && return 0
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
@@ -94,7 +94,7 @@ encode_quality() {
 # 2-pass encoding
 encode_bitrate() {
   VID="$1"
-  OUT="!${VID%.*}_B.p${PRE}.b${VBR}.B${ABR}.t${TUN}.${VID##*.}"
+  OUT="!${VID%.*}_B,p${PRE},b${VBR},B${ABR},t${TUN}.${VID##*.}"
   [ -f "${OUT}" ] && return 0
 
   # Unique passlog prefix to avoid conflicts and ensure cleanup
