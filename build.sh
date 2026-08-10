@@ -22,6 +22,7 @@ mkdir -p "${OUTPUT%/*}"
 {
   # Extract the script part before the placeholder
   sed '/^#@DEFAULT_SOFA@$/,$d' "${TEMPLATE}"
+  echo '#@DEFAULT_SOFA@'
 
   # Encode and append the SOFA file in base64
   base64 "${SOFA_SOURCE}"
