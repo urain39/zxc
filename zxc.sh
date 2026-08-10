@@ -12,7 +12,16 @@ OUT="/dev/null"
 
 # Common constants
 VDF='scale=if(lte(iw\,ih)\,min(iw\,1080)\,-1):if(lte(iw\,ih)\,-1\,min(ih\,1080)),crop=iw-mod(iw\,8):ih-mod(ih\,8)'
+SOF="${HOME}/.local/share/zxc/default.sofa"
 SVT='ac-bias=1.0:enable-cdef=1:enable-dlf=2:enable-kf-tf=1:enable-restoration=1:enable-tf=1:enable-variance-boost=1:lp=4:qp-scale-compress-strength=1:scd=1:scm=3:sharpness=1'
+
+# Extract embedded SOFA file
+ensure_sofa() {
+  if [ ! -f "${SOF}" ]; then
+    mkdir -p "${SOF%/*}"
+    sed '1,/^#@DEFAULT_SOFA@$/d' "$0" | base64 -d > "${SOF}"
+  fi
+}
 
 show_help() {
   # NOTE: Do not use this function after encoding starts, as default values might be changed.
@@ -41,7 +50,6 @@ parse_params() {
   BLK="${BLK%:}"
   SEP="${IFS}"
   IFS=':'
-  # shellcheck disable=SC2086
   for PKV in ${BLK}; do
     [ -z "${PKV}" ] && continue
     KEY="${PKV%%=*}"
@@ -67,8 +75,8 @@ audio_filter_args() {
   case "${CHN}" in
     [0-9]|[0-9][0-9])
       if [ "${CHN}" -gt 2 ]; then
-        # shellcheck disable=SC2140
-        ADF="sofalizer=sofa=${PREFIX:-"/usr"}/share/libmysofa/default.sofa:type=time:gain=10:interpolate=1"
+        ensure_sofa
+        ADF="sofalizer=sofa=${SOF}:type=time:gain=10:interpolate=1"
       fi
       ;;
   esac
@@ -150,3 +158,7 @@ for VID in "$@"; do
     *)  show_help; exit 1 ;;
   esac
 done
+
+exit 0
+
+#@DEFAULT_SOFA@
