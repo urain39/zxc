@@ -70,7 +70,7 @@ parse_params() {
 audio_filter_args() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
-  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" | sed 's/,$//')"
+  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" | awk -F, '{ print $1 }')"
   # Match exact numeric format (e.g., 1, 2, 8)
   case "${CHN}" in
     [0-9]|[0-9][0-9])
@@ -85,7 +85,7 @@ audio_filter_args() {
 # 1-pass encoding
 encode_quality() {
   VID="$1"
-  OUT="!${VID%.*}_Q,p${PRE},c${CRF},B${ABR},t${TUN}.${VID##*.}"
+  OUT="!${VID%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${VID##*.}"
   [ -f "${OUT}" ] && return 0
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
@@ -102,19 +102,19 @@ encode_quality() {
 # 2-pass encoding
 encode_bitrate() {
   VID="$1"
-  OUT="!${VID%.*}_B,p${PRE},b${VBR},B${ABR},t${TUN}.${VID##*.}"
+  OUT="!${VID%.*}_p${PRE},b${VBR},B${ABR},t${TUN}.${VID##*.}"
   [ -f "${OUT}" ] && return 0
 
   # Unique passlog prefix to avoid conflicts and ensure cleanup
-  PASSLOG="${OUT}.pass"
+  PAS="${OUT}.pass"
 
   taskset -a f0 ffmpeg -i "${VID}" \
     -vf "${VDF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
-    -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 -passlogfile "${PASSLOG}" \
+    -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 -passlogfile "${PAS}" \
     -an \
     -f null \
-    "/dev/null" || { rm -f "${PASSLOG}"-*.log*; return 1; }
+    "/dev/null" || { rm -f "${PAS}"-*.log*; return 1; }
 
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
@@ -122,13 +122,13 @@ encode_bitrate() {
     -vf "${VDF}" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
-    -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 2 -passlogfile "${PASSLOG}" \
+    -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 2 -passlogfile "${PAS}" \
     -c:a libopus -ac 2 -b:a "${ABR}" \
     -c:s copy -c:t copy -c:d copy \
-    "${OUT}" || { rm -f "${PASSLOG}"-*.log*; return 1; }
+    "${OUT}" || { rm -f "${PAS}"-*.log*; return 1; }
 
   # Remove 2-pass log files after encoding
-  rm -f "${PASSLOG}"-*.log*
+  rm -f "${PAS}"-*.log*
 }
 
 if [ $# -eq 0 ]; then
