@@ -7,8 +7,9 @@ PRE="6"
 CRF="40"
 VBR="3M"
 ABR="76.8K"
+ASS=""
 TUN=""
-ADF="anull"
+ADF=""
 OUT="/dev/null"
 
 # Common constants
@@ -38,7 +39,7 @@ Options are specified in a colon-delimited block at the beginning.
 Example: zxc :mode=b:preset=4:bitrate=2M: video.mkv
 
 Available keys:
-  mode|m             Encoding mode. "q[uality]" (1-pass CRF) or "b[itrate]" (2-pass). Default: ${MOD}
+  mode|m             Encoding mode. "q[uality]" (1-pass CRF) or "b[itrate]" (2-pass ABR). Default: ${MOD}
   preset|p           SVT-AV1 preset (0-13, lower is slower/better). Default: ${PRE}
   quality|q          CRF value (0-63, lower is better). Used in quality mode. Default: ${CRF}
   bitrate|vb|b       Target video bitrate. Used in bitrate mode. Default: ${VBR}
@@ -69,19 +70,18 @@ parse_params() {
   IFS="${SEP}"
 }
 
-# Decide audio filter based on input audio channel count
-audio_filter_args() {
+# Decide stream mapping and audio filter based on input streams
+prepare_map() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
-  # Match FFmpeg's auto-selection: find the maximum channel count among all audio streams
-  CHN="$(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "$1" | awk -F, 'BEGIN { max = 0 } { if ($1 > max) { max = $1 } } END { print max }')"
-  # Match exact numeric format (e.g., 1, 2, 8)
-  case "${CHN}" in
-    [0-9]|[0-9][0-9])
-      if [ "${CHN}" -gt 2 ]; then
-        ensure_sofa
-        ADF="sofalizer=sofa=${SOF}:type=time:gain=10:interpolate=1"
-      fi
+  read -r ASS MCH << INFO
+ $(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "$1" | awk -F, '{ if ($1 > max) { max = $1; i = NR - 1 } } END { if (NR > 0) print i, max }')
+INFO
+  ASS="${ASS:-"0"}"
+  case "${MCH}" in
+    [3-9]|[1-9][0-9])
+      ensure_sofa
+      ADF="sofalizer=sofa=${SOF}:type=time:gain=10:interpolate=1"
       ;;
   esac
 }
@@ -91,9 +91,10 @@ encode_quality() {
   VID="$1"
   OUT="!${VID%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${VID##*.}"
   [ -f "${OUT}" ] && return 0
-  audio_filter_args "${VID}"
+  prepare_map "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
-    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc (${VER}; Quality)" \
+    -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
+    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Quality)" \
     -vf "${VDF}" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -crf "${CRF}" -pix_fmt yuv420p10le \
@@ -112,7 +113,10 @@ encode_bitrate() {
   # Unique passlog prefix to avoid conflicts and ensure cleanup
   PAS="${OUT}.pass"
 
+  prepare_map "${VID}"
+
   taskset -a f0 ffmpeg -i "${VID}" \
+    -map "0:v:0" \
     -vf "${VDF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 -passlogfile "${PAS}" \
@@ -120,9 +124,9 @@ encode_bitrate() {
     -f null \
     "/dev/null" || { rm -f "${PAS}"-*.log*; return 1; }
 
-  audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
-    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc (${VER}; Bitrate)" \
+    -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
+    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Bitrate)" \
     -vf "${VDF}" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
