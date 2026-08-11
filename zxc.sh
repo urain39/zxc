@@ -1,6 +1,7 @@
 #!/bin/sh
 
 # Defaults
+VER="1.0.0"
 MOD="q"
 PRE="6"
 CRF="40"
@@ -26,6 +27,8 @@ ensure_sofa() {
 show_help() {
   # NOTE: Do not use this function after encoding starts, as default values might be changed.
   cat << EOF
+zxc v${VER}
+
 Usage: zxc [ :key1=value1[:key2=value2...]: ] <video1 [video2 ...]>
 
 Encodes videos using libsvtav1. Output files are prefixed with '!' and include
@@ -70,7 +73,8 @@ parse_params() {
 audio_filter_args() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
-  CHN="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$1" | awk -F, '{ print $1 }')"
+  # Match FFmpeg's auto-selection: find the maximum channel count among all audio streams
+  CHN="$(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "$1" | awk -F, 'BEGIN { max = 0 } { if ($1 > max) { max = $1 } } END { print max }')"
   # Match exact numeric format (e.g., 1, 2, 8)
   case "${CHN}" in
     [0-9]|[0-9][0-9])
@@ -89,7 +93,7 @@ encode_quality() {
   [ -f "${OUT}" ] && return 0
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
-    -map 0 -map_chapters 0 -map_metadata 0 \
+    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc (${VER}; Quality)" \
     -vf "${VDF}" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -crf "${CRF}" -pix_fmt yuv420p10le \
@@ -118,7 +122,7 @@ encode_bitrate() {
 
   audio_filter_args "${VID}"
   taskset -a f0 ffmpeg -i "${VID}" \
-    -map 0 -map_chapters 0 -map_metadata 0 \
+    -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc (${VER}; Bitrate)" \
     -vf "${VDF}" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
