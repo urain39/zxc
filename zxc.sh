@@ -158,8 +158,7 @@ for VID in "$@"; do
   FIL="${VID##*/}"
   DIR="${VID%/*}"
   [ "$DIR" = "$FIL" ] && DIR="."
-  # Check pure filename to skip already encoded files in any directory
-  case "${VID##*/}" in
+  case "${FIL}" in
     !*) continue ;;
   esac
   case "${MOD}" in
