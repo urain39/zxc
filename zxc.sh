@@ -32,7 +32,7 @@ zxc v${VER}
 
 Usage: zxc [ :key1=value1[:key2=value2...]: ] <video1 [video2 ...]>
 
-Encodes videos using libsvtav1. Output files are prefixed with '!' and include
+Encodes videos using libsvtav1 and libopus. Output files are prefixed with '!' and include
 configuration suffixes, preserving the original file extension.
 
 Options are specified in a colon-delimited block at the beginning.
@@ -75,7 +75,7 @@ prepare_map() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
   read -r ASS MCH << INFO
- $(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "$1" | awk -F, '{ if ($1 > max) { max = $1; i = NR - 1 } } END { if (NR > 0) print i, max }')
+$(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "${VID}" | awk -F, '{ if ($1 > max) { max = $1; i = NR - 1 } } END { if (NR > 0) print i, max }')
 INFO
   ASS="${ASS:-"0"}"
   case "${MCH}" in
@@ -88,10 +88,9 @@ INFO
 
 # 1-pass encoding
 encode_quality() {
-  VID="$1"
-  OUT="!${VID%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${VID##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${FIL##*.}"
   [ -f "${OUT}" ] && return 0
-  prepare_map "${VID}"
+  prepare_map
   taskset -a f0 ffmpeg -i "${VID}" \
     -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
     -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Quality)" \
@@ -106,14 +105,13 @@ encode_quality() {
 
 # 2-pass encoding
 encode_bitrate() {
-  VID="$1"
-  OUT="!${VID%.*}_p${PRE},b${VBR},B${ABR},t${TUN}.${VID##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},t${TUN}.${FIL##*.}"
   [ -f "${OUT}" ] && return 0
 
   # Unique passlog prefix to avoid conflicts and ensure cleanup
   PAS="${OUT}.pass"
 
-  prepare_map "${VID}"
+  prepare_map
 
   taskset -a f0 ffmpeg -i "${VID}" \
     -map "0:v:0" \
@@ -157,12 +155,16 @@ case "$1" in
 esac
 
 for VID in "$@"; do
-  case "${VID}" in
+  FIL="${VID##*/}"
+  DIR="${VID%/*}"
+  [ "$DIR" = "$FIL" ] && DIR="."
+  # Check pure filename to skip already encoded files in any directory
+  case "${VID##*/}" in
     !*) continue ;;
   esac
   case "${MOD}" in
-    q*) TUN="${TUN:-"5"}"; encode_quality "${VID}" ;;
-    b*) TUN="${TUN:-"0"}"; encode_bitrate "${VID}" ;;
+    q*) TUN="${TUN:-"5"}"; encode_quality ;;
+    b*) TUN="${TUN:-"0"}"; encode_bitrate ;;
     *)  show_help; exit 1 ;;
   esac
 done
