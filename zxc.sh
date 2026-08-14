@@ -137,7 +137,7 @@ encode_bitrate() {
   rm -f "${PAS}"-*.log*
 }
 
-if [ $# -eq 0 ]; then
+if [ "$#" = "0" ]; then
   show_help
   exit 1
 fi
@@ -157,7 +157,7 @@ esac
 for VID in "$@"; do
   FIL="${VID##*/}"
   DIR="${VID%/*}"
-  [ "$DIR" = "$FIL" ] && DIR="."
+  [ "${DIR}" = "${FIL}" ] && DIR="."
   case "${FIL}" in
     !*) continue ;;
   esac
