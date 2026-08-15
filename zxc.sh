@@ -81,7 +81,7 @@ INFO
   case "${MCH}" in
     [3-9]|[1-9][0-9])
       ensure_sofa
-      ADF="sofalizer=sofa=${SOF}:type=time:gain=10:interpolate=1"
+      ADF="dynaudnorm,sofalizer=sofa=${SOF}:type=time:gain=-10:interpolate=1,volume=10dB"
       ;;
   esac
 }
