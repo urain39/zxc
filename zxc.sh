@@ -94,7 +94,7 @@ INFO
 
 # 1-pass encoding
 encode_quality() {
-  OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${FIL##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},f${FPS},t${TUN}.${FIL##*.}"
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
   prepare_map
   taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
@@ -111,7 +111,7 @@ encode_quality() {
 
 # 2-pass encoding
 encode_bitrate() {
-  OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},t${TUN}.${FIL##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},f${FPS},t${TUN}.${FIL##*.}"
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
 
   # Unique passlog prefix to avoid conflicts and ensure cleanup
