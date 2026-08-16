@@ -7,6 +7,8 @@ PRE="6"
 CRF="40"
 VBR="3M"
 ABR="76.8K"
+FPS="30"
+OWM=""
 ASS=""
 TUN=""
 ADF=""
@@ -44,6 +46,8 @@ Available keys:
   quality|q          CRF value (0-63, lower is better). Used in quality mode. Default: ${CRF}
   bitrate|vb|b       Target video bitrate. Used in bitrate mode. Default: ${VBR}
   audio-bitrate|ab|B Target audio bitrate. Used in both quality and bitrate modes. Default: ${ABR}
+  fps|f              Output frame rate cap. Default: ${FPS}
+  overwrite|ow|w     Overwrite mode: y or n. Default: ${OWM:-"<empty>"}
   tune|t             SVT-AV1 tune parameter. Default: ${TUN:-"5 for quality, 0 for bitrate"}
 EOF
 }
@@ -64,6 +68,8 @@ parse_params() {
       quality|q)          CRF="${VAL}" ;;
       bitrate|vb|b)       VBR="${VAL}" ;;
       audio-bitrate|ab|B) ABR="${VAL}" ;;
+      fps|f)              FPS="${VAL}" ;;
+      overwrite|ow|w)     OWM="${VAL}" ;;
       tune|t)             TUN="${VAL}" ;;
     esac
   done
@@ -75,7 +81,7 @@ prepare_map() {
   # NOTE: Explicit reset is required as ADF might be set by previous file
   ADF="anull"
   read -r ASS MCH << INFO
-$(ffprobe -v error -select_streams a -show_entries stream=channels -of csv=p=0 "${VID}" | awk -F, '{ if ($1 > max) { max = $1; i = NR - 1 } } END { if (NR > 0) print i, max }')
+$(ffprobe -v error -select_streams a -show_entries stream=channels,bit_rate -of csv=p=0 "${VID}" | awk -F, '{ w = $1 * 10 + $2 / 64000; if (w > m) { m = w; i = NR - 1; c = $1 } } END { if (NR > 0) print i, c }')
 INFO
   ASS="${ASS:-"0"}"
   case "${MCH}" in
@@ -89,12 +95,12 @@ INFO
 # 1-pass encoding
 encode_quality() {
   OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},t${TUN}.${FIL##*.}"
-  [ -f "${OUT}" ] && return 0
+  [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
   prepare_map
-  taskset -a f0 ffmpeg -i "${VID}" \
+  taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
     -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
     -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Quality)" \
-    -vf "${VDF}" \
+    -vf "${VDF},fps=min(source_fps\,${FPS})" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -crf "${CRF}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=0:superres-mode=3:superres-qthres=$((CRF - 5)):tune=${TUN}" \
@@ -106,26 +112,26 @@ encode_quality() {
 # 2-pass encoding
 encode_bitrate() {
   OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},t${TUN}.${FIL##*.}"
-  [ -f "${OUT}" ] && return 0
+  [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
 
   # Unique passlog prefix to avoid conflicts and ensure cleanup
   PAS="${OUT}.pass"
 
   prepare_map
 
-  taskset -a f0 ffmpeg -i "${VID}" \
+  taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
     -map "0:v:0" \
-    -vf "${VDF}" \
+    -vf "${VDF},fps=min(source_fps\,${FPS})" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 -passlogfile "${PAS}" \
     -an \
     -f null \
     "/dev/null" || { rm -f "${PAS}"-*.log*; return 1; }
 
-  taskset -a f0 ffmpeg -i "${VID}" \
+  taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
     -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
     -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Bitrate)" \
-    -vf "${VDF}" \
+    -vf "${VDF},fps=min(source_fps\,${FPS})" \
     -af "${ADF}" \
     -c:v libsvtav1 -preset "${PRE}" -g 120 -bf 8 -refs 5 -b:v "${VBR}" -pix_fmt yuv420p10le \
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 2 -passlogfile "${PAS}" \
