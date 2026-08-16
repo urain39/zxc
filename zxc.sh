@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Defaults
-VER="1.0.0"
+VER="1.0.1-denia"
 MOD="q"
 PRE="6"
 CRF="40"
