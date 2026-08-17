@@ -98,8 +98,8 @@ encode_quality() {
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
 
   # Sweep leftovers from a previous interrupted run, then prepare a temp file next to OUT
-  rm -f "${DIR}/zxc.tmp-"*
-  TMP="${DIR}/$(mktemp -u 'zxc.tmp-XXXXXX').${EXT}"
+  rm -f "${DIR}/.zxc.tmp-"*
+  TMP="${DIR}/$(mktemp -u '.zxc.tmp-XXXXXX').${EXT}"
 
   prepare_map
 
@@ -116,7 +116,7 @@ encode_quality() {
     "${TMP}" && mv -f "${TMP}" "${OUT}" || exit 1
 
   # Remove passlog and temp files after encoding
-  rm -f "${DIR}/zxc.tmp-"*
+  rm -f "${DIR}/.zxc.tmp-"*
 }
 
 # 2-pass encoding
@@ -125,8 +125,8 @@ encode_bitrate() {
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
 
   # Sweep leftovers from a previous interrupted run, then prepare a temp file next to OUT
-  rm -f "${DIR}/zxc.tmp-"*
-  TMP="${DIR}/$(mktemp -u 'zxc.tmp-XXXXXX').${EXT}"
+  rm -f "${DIR}/.zxc.tmp-"*
+  TMP="${DIR}/$(mktemp -u '.zxc.tmp-XXXXXX').${EXT}"
 
   # Passlog tied to TMP; unique per attempt, never reused across runs
   PAS="${TMP}.pass"
@@ -154,7 +154,7 @@ encode_bitrate() {
     "${TMP}" && mv -f "${TMP}" "${OUT}" || exit 1
 
   # Remove passlog and temp files after encoding
-  rm -f "${DIR}/zxc.tmp-"*
+  rm -f "${DIR}/.zxc.tmp-"*
 }
 
 if [ "$#" = "0" ]; then
