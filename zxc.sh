@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Defaults
-VER="1.0.1-denia"
+VER="1.0.2-denia"
 MOD="q"
 PRE="6"
 CRF="40"
@@ -94,9 +94,16 @@ INFO
 
 # 1-pass encoding
 encode_quality() {
-  OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},f${FPS},t${TUN}.${FIL##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},q${CRF},B${ABR},f${FPS},t${TUN}.${EXT}"
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
+
+  # Sweep leftovers from a previous interrupted run, then prepare a temp file next to OUT
+  rm -f "${DIR}/zxc.tmp-"*
+  TMP="${DIR}/$(mktemp -u 'zxc.tmp-XXXXXX').${EXT}"
+
   prepare_map
+
+  # Encode to TMP, then move to OUT. On failure/interruption, TMP is kept for debugging.
   taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
     -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
     -map_chapters 0 -map_metadata 0 -metadata comment="Encoded with zxc v${VER} (Quality)" \
@@ -106,16 +113,23 @@ encode_quality() {
     -svtav1-params "${SVT}:rc=0:superres-mode=3:superres-qthres=$((CRF - 5)):tune=${TUN}" \
     -c:a libopus -ac 2 -b:a "${ABR}" \
     -c:s copy -c:t copy -c:d copy \
-    "${OUT}"
+    "${TMP}" && mv -f "${TMP}" "${OUT}" || exit 1
+
+  # Remove passlog and temp files after encoding
+  rm -f "${DIR}/zxc.tmp-"*
 }
 
 # 2-pass encoding
 encode_bitrate() {
-  OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},f${FPS},t${TUN}.${FIL##*.}"
+  OUT="${DIR}/!${FIL%.*}_p${PRE},b${VBR},B${ABR},f${FPS},t${TUN}.${EXT}"
   [ "${OWM}" != "y" ] && [ -f "${OUT}" ] && return 0
 
-  # Unique passlog prefix to avoid conflicts and ensure cleanup
-  PAS="${OUT}.pass"
+  # Sweep leftovers from a previous interrupted run, then prepare a temp file next to OUT
+  rm -f "${DIR}/zxc.tmp-"*
+  TMP="${DIR}/$(mktemp -u 'zxc.tmp-XXXXXX').${EXT}"
+
+  # Passlog tied to TMP; unique per attempt, never reused across runs
+  PAS="${TMP}.pass"
 
   prepare_map
 
@@ -126,7 +140,7 @@ encode_bitrate() {
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 1 -passlogfile "${PAS}" \
     -an \
     -f null \
-    "/dev/null" || { rm -f "${PAS}"-*.log*; return 1; }
+    "/dev/null" || exit 1
 
   taskset -a f0 ffmpeg ${OWM:+"-${OWM}"} -i "${VID}" \
     -map "0:v:0" -map "0:a:${ASS}?" -map "0:s?" -map "0:t?" -map "0:d?" \
@@ -137,10 +151,10 @@ encode_bitrate() {
     -svtav1-params "${SVT}:rc=1:tune=${TUN}" -pass 2 -passlogfile "${PAS}" \
     -c:a libopus -ac 2 -b:a "${ABR}" \
     -c:s copy -c:t copy -c:d copy \
-    "${OUT}" || { rm -f "${PAS}"-*.log*; return 1; }
+    "${TMP}" && mv -f "${TMP}" "${OUT}" || exit 1
 
-  # Remove 2-pass log files after encoding
-  rm -f "${PAS}"-*.log*
+  # Remove passlog and temp files after encoding
+  rm -f "${DIR}/zxc.tmp-"*
 }
 
 if [ "$#" = "0" ]; then
@@ -160,9 +174,15 @@ case "$1" in
     ;;
 esac
 
+# On interruption, keep temp files for debugging; they are swept on next run.
+# 128 + signum: INT=130, TERM=143
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 for VID in "$@"; do
   FIL="${VID##*/}"
   DIR="${VID%/*}"
+  EXT="${FIL##*.}"
   [ "${DIR}" = "${FIL}" ] && DIR="."
   case "${FIL}" in
     !*) continue ;;
