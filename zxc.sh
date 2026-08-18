@@ -179,6 +179,10 @@ esac
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# Attempt to acquire an exclusive non-blocking lock; exit if already locked.
+exec 9> "${TMPDIR:-"/tmp"}/.zxc.lock"
+flock -xn 9 || { echo "Another instance is running" >&2; exit 1; }
+
 for VID in "$@"; do
   FIL="${VID##*/}"
   DIR="${VID%/*}"
